@@ -1,0 +1,179 @@
+version: 2.1
+commands:
+  install_awscli:
+    description: Install AWS CLI v2
+    steps:
+    - run:
+        name: Install AWS CLI v2
+        command: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+  install_ansible:
+     description: Install Ansible v2
+     steps:
+       - run:
+          name: Install Ansible v2
+          command: |
+           sudo apt update
+           sudo apt install software-properties-common
+           sudo add-apt-repository --yes --update ppa:ansible/ansible
+           sudo apt install ansible
+       
+            
+jobs:
+  build-frontend:
+    docker:
+      - image: cimg/node:13.8.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys: [frontend-dep]
+      - run:
+          name: Build frontend
+          command: |
+            cd frontend
+            npm install
+            npm run build
+      - save_cache:
+          paths: [frontend/node_modules]
+          key: frontend-dep
+
+  build-backend:
+    docker:
+      - image: cimg/node:13.8.0
+    steps:
+      - checkout
+      - restore_cache:
+          keys: [backend-deps]
+      - run:
+          name: Backend build
+          command: |
+            cd backend
+            npm install
+            npm run build
+      - save_cache:
+          paths: [backend/node_modules]
+          key: backend-deps
+  test-frontend:
+   docker:
+      - image: cimg/node:13.8.0
+   steps:
+      - checkout
+      - restore_cache:
+          keys: [frontend-deps]
+      - run:
+          name: front-end Unit Test
+          command: |
+            cd frontend
+            npm install
+            npm run test          
+  test-backend:
+     docker:
+      - image: cimg/node:13.8.0
+     steps:
+      - checkout
+      - restore_cache:
+          keys: [backend-deps]
+      - run:
+          name: back-end Unit Test
+          command: |
+            cd frontend
+            npm install
+            npm run test
+      - save_cache:
+          paths: [backend/node_modules]
+          key: backend-deps
+  scan-frontend:
+     docker:
+      - image: cimg/node:13.8.0
+     steps:
+      - checkout
+      - restore_cache:
+          keys: [backend-deps]
+      - run:
+          name: back-end scan
+          command: |
+            cd frontend
+            npm install
+            npm audit fix --force --audit-level=critical            
+            npm audit --audit-level=critical
+      - save_cache:
+          paths: [backend/node_modules]
+          key: backend-deps
+
+  scan-backend:
+     docker:
+      - image: cimg/node:13.8.0
+     steps:
+      - checkout
+      - restore_cache:
+          keys: [backend-deps]
+      - run:
+          name: back-end scan
+          command: |
+            cd frontend
+            npm install
+            npm audit fix --force--audit-level=critical
+            npm audit fix --force --audit-level=critical
+            npm audit --audit-level=critical
+  deploy-infrastructure:
+     docker:
+       - image: cimg/base:stable
+     steps:
+       - checkout
+       - install_awscli
+       - run:
+           name: Ensure back-end infrastructure exists
+           command: |
+             aws cloudformation deploy \
+               --template-file .circleci/files/backend.yml \
+               --tags project=project3 \
+               --stack-name "project3-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+               --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}" 
+             
+       - run:
+           name: Ensure front-end infrastructure exist
+           command: |
+             aws cloudformation deploy \
+               --template-file .circleci/files/frontend.yml \
+               --tags project=project3 \
+               --stack-name "project3-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
+               --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"
+  
+               
+       - run:
+           name: Add back-end ip to ansible inventory
+           command: |
+              BACKEND_PUBLIC_IP=$(aws ec2 describe-instances \
+               --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+               --query 'Reservations[*].Instances[*].PublicIpAddress' \
+               --output text)
+                echo $BACKEND_PUBLIC_IP >> .circleci/ansible/inventory.txt
+                cat .circleci/ansible/inventory.txt
+       - persist_to_workspace:
+           root: ~/
+           paths:
+             - project/.circleci/ansible/inventory.txt          
+            
+
+workflows:
+  default:
+    jobs:
+      - build-frontend
+      - build-backend
+      - test-frontend:
+           requires: [build-frontend]
+      - test-backend:
+           requires: [build-backend]
+      - scan-backend:
+           requires: [build-backend]
+      - scan-frontend:
+           requires: [build-frontend]
+      - deploy-infrastructure:
+           requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+           filters:
+               branches:
+                 only: [master]     
+      
+      
