@@ -102,21 +102,21 @@ jobs:
           paths: [backend/node_modules]
           key: backend-deps
 
-  scan-backend:
-     docker:
-      - image: cimg/node:13.8.0
-     steps:
-      - checkout
-      - restore_cache:
-          keys: [backend-deps]
-      - run:
-          name: back-end scan
-          command: |
-            cd frontend
-            npm install
-            npm audit fix --force--audit-level=critical
-            npm audit fix --force --audit-level=critical
-            npm audit --audit-level=critical
+  # scan-backend:
+  #    docker:
+  #     - image: cimg/node:13.8.0
+  #    steps:
+  #     - checkout
+  #     - restore_cache:
+  #         keys: [backend-deps]
+  #     - run:
+  #         name: back-end scan
+  #         command: |
+  #           cd frontend
+  #           npm install
+  #           npm audit fix --force--audit-level=critical
+  #           npm audit fix --force --audit-level=critical
+  #           npm audit --audit-level=critical
   deploy-infrastructure:
      docker:
        - image: cimg/base:stable
@@ -166,8 +166,8 @@ workflows:
            requires: [build-frontend]
       - test-backend:
            requires: [build-backend]
-      - scan-backend:
-           requires: [build-backend]
+      # - scan-backend:
+      #      requires: [build-backend]
       - scan-frontend:
            requires: [build-frontend]
       - deploy-infrastructure:
