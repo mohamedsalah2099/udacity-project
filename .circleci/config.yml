@@ -102,21 +102,22 @@ jobs:
           paths: [backend/node_modules]
           key: backend-deps
 
-  # scan-backend:
-  #    docker:
-  #     - image: cimg/node:13.8.0
-  #    steps:
-  #     - checkout
-  #     - restore_cache:
-  #         keys: [backend-deps]
-  #     - run:
-  #         name: back-end scan
-  #         command: |
-  #           cd frontend
-  #           npm install
-  #           npm audit fix --force--audit-level=critical
-  #           npm audit fix --force --audit-level=critical
-  #           npm audit --audit-level=critical
+  scan-backend:
+     docker:
+      - image: cimg/node:13.8.0
+     steps:
+      - checkout
+      - restore_cache:
+          keys: [backend-deps]
+      - run:
+          name: back-end scan
+          command: |
+            cd frontend
+            npm install
+            npm audit fix --force--audit-level=critical
+            npm audit fix --force --audit-level=critical
+            npm audit --audit-level=critical
+            
   deploy-infrastructure:
      docker:
        - image: cimg/base:stable
@@ -131,6 +132,7 @@ jobs:
                --tags project=project3 \
                --stack-name "project3-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}" 
+             
        - run:
            name: Ensure front-end infrastructure exist
            command: |
@@ -165,8 +167,8 @@ workflows:
            requires: [build-frontend]
       - test-backend:
            requires: [build-backend]
-      # - scan-backend:
-      #      requires: [build-backend]
+      - scan-backend:
+           requires: [build-backend]
       - scan-frontend:
            requires: [build-frontend]
       - deploy-infrastructure:
